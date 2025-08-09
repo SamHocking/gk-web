@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Sensor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; }
         #status { font-weight: bold; }
         #data { margin-top: 20px; font-size: 18px; }
+        canvas { max-width: 400px; margin: 10px auto; }
     </style>
 </head>
 <body>
@@ -20,25 +22,87 @@
         Gyro X: <span id="gyroX">N/A</span> | Y: <span id="gyroY">N/A</span> | Z: <span id="gyroZ">N/A</span><br>
         Temp: <span id="temp">N/A</span> °C
     </div>
+    <canvas id="accelChart"></canvas>
+    <canvas id="gyroChart"></canvas>
+    <canvas id="fsrChart"></canvas>  <!-- New: FSR over time -->
+    <canvas id="fsrTempChart"></canvas>
 
     <script>
-        const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';  // Your SERVICE_UUID
-        const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';  // Your CHARACTERISTIC_UUID
+        const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+        const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
         let device;
         let characteristic;
 
+        // Chart data arrays (last 20 points)
+        const maxPoints = 20;
+        let accelData = { x: [], y: [], z: [] };
+        let gyroData = { x: [], y: [], z: [] };
+        let fsrData = [];  // New: For FSR line chart
+        let tempData = [];
+
+        // Initialize charts
+        const accelCtx = document.getElementById('accelChart').getContext('2d');
+        const accelChart = new Chart(accelCtx, {
+            type: 'line',
+            data: {
+                labels: [],  // Timestamps or indices
+                datasets: [
+                    { label: 'Accel X', data: accelData.x, borderColor: 'red' },
+                    { label: 'Accel Y', data: accelData.y, borderColor: 'green' },
+                    { label: 'Accel Z', data: accelData.z, borderColor: 'blue' }
+                ]
+            },
+            options: { scales: { y: { beginAtZero: false } } }
+        });
+
+        const gyroCtx = document.getElementById('gyroChart').getContext('2d');
+        const gyroChart = new Chart(gyroCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Gyro X', data: gyroData.x, borderColor: 'red' },
+                    { label: 'Gyro Y', data: gyroData.y, borderColor: 'green' },
+                    { label: 'Gyro Z', data: gyroData.z, borderColor: 'blue' }
+                ]
+            },
+            options: { scales: { y: { beginAtZero: false } } }
+        });
+
+        // New: FSR line chart
+        const fsrCtx = document.getElementById('fsrChart').getContext('2d');
+        const fsrChart = new Chart(fsrCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'FSR Pressure', data: fsrData, borderColor: 'orange', fill: false }
+                ]
+            },
+            options: { scales: { y: { beginAtZero: true, max: 4095 } } }  // FSR range 0-4095
+        });
+
+        const fsrTempCtx = document.getElementById('fsrTempChart').getContext('2d');
+        const fsrTempChart = new Chart(fsrTempCtx, {
+            type: 'bar',
+            data: {
+                labels: ['FSR', 'Temp'],
+                datasets: [{ label: 'Current Values', data: [0, 0], backgroundColor: ['orange', 'purple'] }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
                 device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'ESP32_Sensor' }],  // Filter by your device name
+                    filters: [{ name: 'ESP32_Sensor' }],
                     optionalServices: [serviceUUID]
                 });
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(serviceUUID);
                 characteristic = await service.getCharacteristic(characteristicUUID);
 
-                // Start notifications
                 await characteristic.startNotifications();
                 characteristic.addEventListener('characteristicvaluechanged', handleData);
 
@@ -51,16 +115,16 @@
         });
 
         function handleData(event) {
-            const value = new TextDecoder().decode(event.target.value);  // Decode BLE data as string
+            const value = new TextDecoder().decode(event.target.value);
             console.log('Received: ' + value);
             let data;
             try {
-                data = JSON.parse(value);  // Parse if using JSON format
+                data = JSON.parse(value);
             } catch {
-                data = {};  // Fallback if not JSON
+                data = {};
             }
 
-            // Update UI
+            // Update text
             document.getElementById('fsr').textContent = data.fsr || 'N/A';
             document.getElementById('accelX').textContent = data.accel?.x || 'N/A';
             document.getElementById('accelY').textContent = data.accel?.y || 'N/A';
@@ -69,6 +133,49 @@
             document.getElementById('gyroY').textContent = data.gyro?.y || 'N/A';
             document.getElementById('gyroZ').textContent = data.gyro?.z || 'N/A';
             document.getElementById('temp').textContent = data.temp || 'N/A';
+
+            // Update charts
+            const timestamp = new Date().toLocaleTimeString();  // Or use index
+
+            // Accel
+            accelData.x.push(data.accel?.x || 0);
+            accelData.y.push(data.accel?.y || 0);
+            accelData.z.push(data.accel?.z || 0);
+            if (accelData.x.length > maxPoints) {
+                accelData.x.shift(); accelData.y.shift(); accelData.z.shift();
+            }
+            accelChart.data.labels.push(timestamp);
+            if (accelChart.data.labels.length > maxPoints) accelChart.data.labels.shift();
+            accelChart.data.datasets[0].data = accelData.x;
+            accelChart.data.datasets[1].data = accelData.y;
+            accelChart.data.datasets[2].data = accelData.z;
+            accelChart.update();
+
+            // Gyro (similar)
+            gyroData.x.push(data.gyro?.x || 0);
+            gyroData.y.push(data.gyro?.y || 0);
+            gyroData.z.push(data.gyro?.z || 0);
+            if (gyroData.x.length > maxPoints) {
+                gyroData.x.shift(); gyroData.y.shift(); gyroData.z.shift();
+            }
+            gyroChart.data.labels.push(timestamp);
+            if (gyroChart.data.labels.length > maxPoints) gyroChart.data.labels.shift();
+            gyroChart.data.datasets[0].data = gyroData.x;
+            gyroChart.data.datasets[1].data = gyroData.y;
+            gyroChart.data.datasets[2].data = gyroData.z;
+            gyroChart.update();
+
+            // New: FSR line update
+            fsrData.push(data.fsr || 0);
+            if (fsrData.length > maxPoints) fsrData.shift();
+            fsrChart.data.labels.push(timestamp);
+            if (fsrChart.data.labels.length > maxPoints) fsrChart.data.labels.shift();
+            fsrChart.data.datasets[0].data = fsrData;
+            fsrChart.update();
+
+            // FSR/Temp bar (latest values)
+            fsrTempChart.data.datasets[0].data = [data.fsr || 0, data.temp || 0];
+            fsrTempChart.update();
         }
     </script>
 </body>
