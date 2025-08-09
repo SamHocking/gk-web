@@ -7,14 +7,56 @@
     <title>ESP32 Sensor Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  <!-- For graphs -->
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        #status { font-weight: bold; }
-        #data { margin-top: 20px; font-size: 18px; }
-        canvas { max-width: 400px; margin: 10px auto; }
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            background-color: #f4f4f9; 
+            color: #333; 
+            margin: 0; 
+            padding: 20px; 
+        }
+        h1 { 
+            color: #4a4a8c; 
+        }
+        #status { 
+            font-weight: bold; 
+            color: #ff6347; 
+        }
+        #data { 
+            margin-top: 20px; 
+            font-size: 18px; 
+            background: #fff; 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
+        canvas { 
+            max-width: 600px; 
+            margin: 20px auto; 
+            background: #fff; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
+        button { 
+            background-color: #4a4a8c; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            font-size: 16px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
+        button:hover { 
+            background-color: #363677; 
+        }
+        button:disabled { 
+            background-color: #ccc; 
+            cursor: not-allowed; 
+        }
     </style>
 </head>
 <body>
-    <h1>ESP32 Sensor Data</h1>
+    <h1>ESP32 Sensor Dashboard</h1>
     <button id="connectBtn">Connect to ESP32</button>
     <p id="status">Status: Disconnected</p>
     <div id="data">
@@ -23,7 +65,10 @@
         Gyro X: <span id="gyroX">N/A</span> | Y: <span id="gyroY">N/A</span> | Z: <span id="gyroZ">N/A</span><br>
         Temp: <span id="temp">N/A</span> °C
     </div>
-    <canvas id="accelChart"></canvas>  <!-- Canvas for acceleration graph -->
+    <canvas id="accelChart"></canvas>  <!-- Acceleration graph -->
+    <canvas id="gyroChart"></canvas>   <!-- Gyroscope graph -->
+    <canvas id="fsrChart"></canvas>    <!-- FSR pressure graph -->
+    <canvas id="tempChart"></canvas>   <!-- Temperature graph -->
 
     <script src="script.js"></script>  <!-- Link to external JS file -->
 </body>
