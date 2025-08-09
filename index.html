@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Sensor Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #status { font-weight: bold; }
+        #data { margin-top: 20px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Sensor Data</h1>
+    <button id="connectBtn">Connect to ESP32</button>
+    <p id="status">Status: Disconnected</p>
+    <div id="data">
+        FSR: <span id="fsr">N/A</span><br>
+        Accel X: <span id="accelX">N/A</span> | Y: <span id="accelY">N/A</span> | Z: <span id="accelZ">N/A</span><br>
+        Gyro X: <span id="gyroX">N/A</span> | Y: <span id="gyroY">N/A</span> | Z: <span id="gyroZ">N/A</span><br>
+        Temp: <span id="temp">N/A</span> °C
+    </div>
+
+    <script>
+        const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';  // Your SERVICE_UUID
+        const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';  // Your CHARACTERISTIC_UUID
+
+        let device;
+        let characteristic;
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ESP32_Sensor' }],  // Filter by your device name
+                    optionalServices: [serviceUUID]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(serviceUUID);
+                characteristic = await service.getCharacteristic(characteristicUUID);
+
+                // Start notifications
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleData);
+
+                document.getElementById('status').textContent = 'Status: Connected';
+                document.getElementById('connectBtn').disabled = true;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').textContent = 'Status: Error - ' + error.message;
+            }
+        });
+
+        function handleData(event) {
+            const value = new TextDecoder().decode(event.target.value);  // Decode BLE data as string
+            console.log('Received: ' + value);
+            let data;
+            try {
+                data = JSON.parse(value);  // Parse if using JSON format
+            } catch {
+                data = {};  // Fallback if not JSON
+            }
+
+            // Update UI
+            document.getElementById('fsr').textContent = data.fsr || 'N/A';
+            document.getElementById('accelX').textContent = data.accel?.x || 'N/A';
+            document.getElementById('accelY').textContent = data.accel?.y || 'N/A';
+            document.getElementById('accelZ').textContent = data.accel?.z || 'N/A';
+            document.getElementById('gyroX').textContent = data.gyro?.x || 'N/A';
+            document.getElementById('gyroY').textContent = data.gyro?.y || 'N/A';
+            document.getElementById('gyroZ').textContent = data.gyro?.z || 'N/A';
+            document.getElementById('temp').textContent = data.temp || 'N/A';
+        }
+    </script>
+</body>
+</html>
