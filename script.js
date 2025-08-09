@@ -1,12 +1,13 @@
 // script.js
-const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';  // Your SERVICE_UUID
-const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';  // Your CHARACTERISTIC_UUID
+const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
 let device;
 let characteristic;
+let isConnected = false;
 
-// Chart data and configs
-const maxPoints = 20;  // Rolling window for graph points
+// Chart configs
+const maxPoints = 50;  // Increased for smoother trends with 100ms updates
 let accelData = { x: [], y: [], z: [] };
 let gyroData = { x: [], y: [], z: [] };
 let fsrData = [];
@@ -14,74 +15,83 @@ let tempData = [];
 let accelChart, gyroChart, fsrChart, tempChart;
 
 // Initialize charts
-const accelCtx = document.getElementById('accelChart').getContext('2d');
-accelChart = new Chart(accelCtx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-            { label: 'Accel X', data: accelData.x, borderColor: 'red', fill: false },
-            { label: 'Accel Y', data: accelData.y, borderColor: 'green', fill: false },
-            { label: 'Accel Z', data: accelData.z, borderColor: 'blue', fill: false }
-        ]
-    },
-    options: {
-        scales: { y: { beginAtZero: false } },
-        responsive: true,
-        plugins: { legend: { position: 'top' } }
-    }
-});
+function initCharts() {
+    // Accel Chart
+    const accelCtx = document.getElementById('accelChart').getContext('2d');
+    accelChart = new Chart(accelCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Accel X', data: accelData.x, borderColor: '#FF6384', fill: false, tension: 0.1 },
+                { label: 'Accel Y', data: accelData.y, borderColor: '#36A2EB', fill: false, tension: 0.1 },
+                { label: 'Accel Z', data: accelData.z, borderColor: '#FFCE56', fill: false, tension: 0.1 }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: false } },
+            animation: { duration: 0 }  // Fast updates, no animation lag
+        }
+    });
 
-const gyroCtx = document.getElementById('gyroChart').getContext('2d');
-gyroChart = new Chart(gyroCtx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-            { label: 'Gyro X', data: gyroData.x, borderColor: 'red', fill: false },
-            { label: 'Gyro Y', data: gyroData.y, borderColor: 'green', fill: false },
-            { label: 'Gyro Z', data: gyroData.z, borderColor: 'blue', fill: false }
-        ]
-    },
-    options: {
-        scales: { y: { beginAtZero: false } },
-        responsive: true,
-        plugins: { legend: { position: 'top' } }
-    }
-});
+    // Gyro Chart
+    const gyroCtx = document.getElementById('gyroChart').getContext('2d');
+    gyroChart = new Chart(gyroCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Gyro X', data: gyroData.x, borderColor: '#4BC0C0', fill: false, tension: 0.1 },
+                { label: 'Gyro Y', data: gyroData.y, borderColor: '#9966FF', fill: false, tension: 0.1 },
+                { label: 'Gyro Z', data: gyroData.z, borderColor: '#FF9F40', fill: false, tension: 0.1 }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: false } },
+            animation: { duration: 0 }
+        }
+    });
 
-const fsrCtx = document.getElementById('fsrChart').getContext('2d');
-fsrChart = new Chart(fsrCtx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-            { label: 'FSR Pressure', data: fsrData, borderColor: 'orange', fill: false }
-        ]
-    },
-    options: {
-        scales: { y: { beginAtZero: true, max: 4095 } },  // FSR range
-        responsive: true,
-        plugins: { legend: { position: 'top' } }
-    }
-});
+    // FSR Chart (Line for pressure trends)
+    const fsrCtx = document.getElementById('fsrChart').getContext('2d');
+    fsrChart = new Chart(fsrCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'FSR Pressure', data: fsrData, borderColor: '#E74C3C', fill: false, tension: 0.1 }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, max: 4095 } },
+            animation: { duration: 0 }
+        }
+    });
 
-const tempCtx = document.getElementById('tempChart').getContext('2d');
-tempChart = new Chart(tempCtx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-            { label: 'Temperature (°C)', data: tempData, borderColor: 'purple', fill: false }
-        ]
-    },
-    options: {
-        scales: { y: { beginAtZero: false } },
-        responsive: true,
-        plugins: { legend: { position: 'top' } }
-    }
-});
+    // Temp Chart (Bar gauge style)
+    const tempCtx = document.getElementById('tempChart').getContext('2d');
+    tempChart = new Chart(tempCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Temperature (°C)'],
+            datasets: [
+                { label: 'Temp', data: tempData, backgroundColor: '#3498DB' }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, suggestedMax: 50 } },  // Adjust max based on expected temp
+            animation: { duration: 0 }
+        }
+    });
+}
 
+initCharts();  // Call on load
+
+// Connect button
 document.getElementById('connectBtn').addEventListener('click', async () => {
     try {
         device = await navigator.bluetooth.requestDevice({
@@ -97,13 +107,44 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
 
         document.getElementById('status').textContent = 'Status: Connected';
         document.getElementById('connectBtn').disabled = true;
+        document.getElementById('disconnectBtn').disabled = false;
+        isConnected = true;
     } catch (error) {
         console.error(error);
         document.getElementById('status').textContent = 'Status: Error - ' + error.message;
     }
 });
 
+// Disconnect button
+document.getElementById('disconnectBtn').addEventListener('click', async () => {
+    if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+    }
+    document.getElementById('status').textContent = 'Status: Disconnected';
+    document.getElementById('connectBtn').disabled = false;
+    document.getElementById('disconnectBtn').disabled = true;
+    isConnected = false;
+});
+
+// Reset charts button
+document.getElementById('resetChartsBtn').addEventListener('click', () => {
+    // Clear data arrays
+    accelData = { x: [], y: [], z: [] };
+    gyroData = { x: [], y: [], z: [] };
+    fsrData = [];
+    tempData = [];
+
+    // Update all charts
+    [accelChart, gyroChart, fsrChart, tempChart].forEach(chart => {
+        chart.data.labels = [];
+        chart.data.datasets.forEach(dataset => dataset.data = []);
+        chart.update();
+    });
+});
+
 function handleData(event) {
+    if (!isConnected) return;  // Prevent updates if disconnected
+
     const value = new TextDecoder().decode(event.target.value);
     console.log('Received: ' + value);
     let data;
@@ -123,7 +164,7 @@ function handleData(event) {
     document.getElementById('gyroZ').textContent = data.gyro?.z || 'N/A';
     document.getElementById('temp').textContent = data.temp || 'N/A';
 
-    // Update graphs
+    // Update charts with new data (fast, no animation)
     const timestamp = new Date().toLocaleTimeString();
 
     // Accel
@@ -162,11 +203,8 @@ function handleData(event) {
     fsrChart.data.datasets[0].data = fsrData;
     fsrChart.update();
 
-    // Temp
-    tempData.push(data.temp || 0);
-    if (tempData.length > maxPoints) tempData.shift();
-    tempChart.data.labels.push(timestamp);
-    if (tempChart.data.labels.length > maxPoints) tempChart.data.labels.shift();
+    // Temp (update bar with latest)
+    tempData = [data.temp || 0];
     tempChart.data.datasets[0].data = tempData;
     tempChart.update();
 }
